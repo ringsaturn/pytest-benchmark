@@ -41,6 +41,10 @@ def test_help(testdir):
         "  --benchmark-group-by=LABEL",
         "                        *Default: 'group'",
         "  --benchmark-columns=LABELS",
+        "                        Comma-separated list of columns to show in the result",
+        "                        table. Use 'pXX.XX' (e.g. 'p99.9') to show",
+        "                        percentiles. Default: 'min, max, mean, stddev, median,",
+        "                        iqr, outliers, rounds, iterations'",
         "  --benchmark-histogram=[FILENAME-PREFIX]",
         "*",
     ])
@@ -668,6 +672,18 @@ def test_save_extra_info(testdir):
     assert bench_info['extra_info'] == {'foo': 'bar'}
 
 
+def test_save_percentiles(testdir):
+    test = testdir.makepyfile(SIMPLE_TEST)
+    result = testdir.runpytest('--doctest-modules', '--benchmark-save=foobar',
+                               '--benchmark-max-time=0.0000001', '--benchmark-columns=min,p99,max', test)
+    result.stderr.fnmatch_lines([
+        "Saved benchmark data in: *",
+    ])
+    info = json.loads(testdir.tmpdir.join('.benchmarks').listdir()[0].join('0001_foobar.json').read())
+    bench_info = info['benchmarks'][0]
+    assert 'p99' in bench_info['stats']
+
+
 def test_update_machine_info_hook_detection(testdir):
     """Tests detection and execution and update_machine_info_hooks.
 
@@ -1119,5 +1135,16 @@ def test_columns(testdir):
         "test_columns.py ...*",
         "* benchmark: 2 tests *",
         "Name (time in ?s) * Max * Iterations * Min *",
+        "------*",
+    ])
+
+def test_columns_percentiles(testdir):
+    test = testdir.makepyfile(SIMPLE_TEST)
+    result = testdir.runpytest('--doctest-modules', '--benchmark-columns=max,p99,iterations,min', test)
+    result.stdout.fnmatch_lines([
+        "*collected 3 items",
+        "test_columns_percentiles.py ...",
+        "* benchmark: 2 tests *",
+        "Name (time in ?s) * Max * P99 * Iterations * Min *",
         "------*",
     ])

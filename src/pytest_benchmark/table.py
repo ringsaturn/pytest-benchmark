@@ -5,6 +5,7 @@ import operator
 import sys
 from math import isinf
 
+from .utils import PERCENTILE_COL_RX
 from .utils import report_online_progress
 from .utils import report_progress
 
@@ -22,6 +23,9 @@ class TableResults(object):
         self.scale_unit = scale_unit
 
     def display(self, tr, groups, progress_reporter=report_progress):
+        percentile_columns = tuple(c for c in self.columns if PERCENTILE_COL_RX.match(c))
+        numeric_columns = self.standard_columns + percentile_columns
+
         tr.write_line("")
         report_online_progress(progress_reporter, tr, "Computing stats ...")
         for line, (group, benchmarks) in progress_reporter(groups, tr, "Computing stats ... group {pos}/{total}"):
@@ -32,8 +36,7 @@ class TableResults(object):
             worst = {}
             best = {}
             solo = len(benchmarks) == 1
-            for line, prop in progress_reporter(("min", "max", "mean", "median", "iqr", "stddev", "ops"),
-                                                tr, "{line}: {value}", line=line):
+            for line, prop in progress_reporter(numeric_columns + ("ops",), tr, "{line}: {value}", line=line):
                 if prop == "ops":
                     worst[prop] = min(bench[prop] for _, bench in progress_reporter(
                         benchmarks, tr, "{line} ({pos}/{total})", line=line))
@@ -65,6 +68,8 @@ class TableResults(object):
                 "outliers": "Outliers",
                 "ops": "OPS ({0}ops/s)".format(ops_unit) if ops_unit else "OPS",
             }
+            labels.update(dict((c, c.upper()) for c in percentile_columns))
+
             widths = {
                 "name": 3 + max(len(labels["name"]), max(len(benchmark["name"]) for benchmark in benchmarks)),
                 "rounds": 2 + max(len(labels["rounds"]), len(str(worst["rounds"]))),
@@ -72,7 +77,7 @@ class TableResults(object):
                 "outliers": 2 + max(len(labels["outliers"]), len(str(worst["outliers"]))),
                 "ops": 2 + max(len(labels["ops"]), len(NUMBER_FMT.format(best["ops"] * ops_adjustment))),
             }
-            for prop in "min", "max", "mean", "stddev", "median", "iqr":
+            for prop in numeric_columns:
                 widths[prop] = 2 + max(len(labels[prop]), max(
                     len(NUMBER_FMT.format(bench[prop] * adjustment))
                     for bench in benchmarks
@@ -82,7 +87,7 @@ class TableResults(object):
             labels_line = labels["name"].ljust(widths["name"]) + "".join(
                 labels[prop].rjust(widths[prop]) + (
                     " " * rpadding
-                    if prop not in ["outliers", "rounds", "iterations"]
+                    if prop not in ("outliers", "rounds", "iterations")
                     else ""
                 )
                 for prop in self.columns
@@ -102,7 +107,7 @@ class TableResults(object):
                 has_error = bench.get("has_error")
                 tr.write(bench["name"].ljust(widths["name"]), red=has_error, invert=has_error)
                 for prop in self.columns:
-                    if prop in ("min", "max", "mean", "stddev", "median", "iqr"):
+                    if prop in numeric_columns:
                         tr.write(
                             ALIGNED_NUMBER_FMT.format(
                                 bench[prop] * adjustment,

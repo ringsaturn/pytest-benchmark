@@ -387,9 +387,10 @@ def pytest_benchmark_generate_json(config, benchmarks, include_data, machine_inf
         "datetime": datetime.utcnow().isoformat(),
         "version": __version__,
     }
+    columns = config.getoption("benchmark_columns")
     for bench in benchmarks:
         if not bench.has_error:
-            benchmarks_json.append(bench.as_dict(include_data=include_data))
+            benchmarks_json.append(bench.as_dict(include_data=include_data, columns=columns))
     return output_json
 
 
